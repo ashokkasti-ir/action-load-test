@@ -21,7 +21,7 @@ const EXPECTED_STATUS = parseInt(env('EXPECTED_STATUS', '200'), 10);
 
 const RATE = parseInt(env('RATE', '1000'), 10); // requests per second
 const DURATION = env('DURATION', '10s');
-const PRE_ALLOCATED_VUS = parseInt(env('PRE_ALLOCATED_VUS', String(Math.max(50, Math.ceil(RATE / 10)))), 10);
+const PRE_ALLOCATED_VUS = parseInt(env('PRE_ALLOCATED_VUS', String(Math.max(50, Math.ceil(RATE / 5)))), 10);
 const MAX_VUS = parseInt(env('MAX_VUS', String(Math.max(PRE_ALLOCATED_VUS, RATE))), 10);
 
 const P95_MS = parseInt(env('P95_MS', '1000'), 10);
