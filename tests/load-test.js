@@ -22,7 +22,9 @@ const EXPECTED_STATUS = parseInt(env('EXPECTED_STATUS', '200'), 10);
 const RATE = parseInt(env('RATE', '1000'), 10); // requests per second
 const DURATION = env('DURATION', '10s');
 const PRE_ALLOCATED_VUS = parseInt(env('PRE_ALLOCATED_VUS', String(Math.max(50, Math.ceil(RATE / 5)))), 10);
-const MAX_VUS = parseInt(env('MAX_VUS', String(Math.max(PRE_ALLOCATED_VUS, RATE))), 10);
+// Workers needed = rate x latency. Behind an inspecting proxy latency can be
+// 1-2s, so allow 3 workers per req/s before k6 starts dropping requests.
+const MAX_VUS = parseInt(env('MAX_VUS', String(Math.max(100, PRE_ALLOCATED_VUS, RATE * 3))), 10);
 
 const P95_MS = parseInt(env('P95_MS', '1000'), 10);
 const MAX_ERROR_RATE = parseFloat(env('MAX_ERROR_RATE', '0.01'));

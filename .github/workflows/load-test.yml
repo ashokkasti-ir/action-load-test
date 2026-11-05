@@ -1,49 +1,30 @@
 name: API Load Test
 
+# Runs one k6 burst per matrix entry. Every job gets its own runner and its
+# own InvisiRisk PSE proxy, and all k6 traffic goes through that proxy.
+# The rate is kept low enough for the proxy to inspect every request
+# without queueing (see README "Load through the InvisiRisk proxy").
+
 on:
   workflow_dispatch:
     inputs:
-      target_url:
-        description: "Full URL to hit. Default is JSONPlaceholder, a free public mock API (use .../posts with POST, expected 201)"
-        required: true
-        default: "https://jsonplaceholder.typicode.com/posts/1"
-        type: string
-      method:
-        description: "HTTP method"
-        required: true
-        default: GET
-        type: choice
-        options: [GET, POST, PUT, PATCH, DELETE]
       rate:
-        description: "Requests per second"
+        description: "Requests per second, per matrix job"
         required: true
-        default: "1000"
+        default: "40"
         type: string
       duration:
-        description: "How long to sustain that rate (k6 format: 10s, 1m)"
+        description: "How long each job sustains that rate (k6 format: 10s, 1m)"
         required: true
-        default: "10s"
-        type: string
-      body:
-        description: "Request body (JSON string), optional"
-        required: false
-        type: string
-      headers:
-        description: 'Extra headers as JSON, e.g. {"X-Api-Key":"abc"} (use the LOAD_TEST_AUTH_TOKEN secret for bearer tokens)'
-        required: false
-        type: string
-      expected_status:
-        description: "Status code that counts as success"
-        required: true
-        default: "200"
+        default: "15s"
         type: string
       p95_ms:
-        description: "Fail the run if p95 latency exceeds this many ms"
+        description: "Fail a job if its p95 latency exceeds this many ms"
         required: true
-        default: "1000"
+        default: "2000"
         type: string
       max_error_rate:
-        description: "Fail the run if the error rate exceeds this fraction (0.01 = 1%)"
+        description: "Fail a job if its error rate exceeds this fraction (0.01 = 1%)"
         required: true
         default: "0.01"
         type: string
@@ -59,20 +40,60 @@ concurrency:
 
 jobs:
   load-test:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      # Let every variation finish so one slow endpoint doesn't hide the rest.
+      fail-fast: false
+      matrix:
+        include:
+          - name: get-single-post
+            method: GET
+            url: https://jsonplaceholder.typicode.com/posts/1
+            expected_status: "200"
+            body: ""
+          - name: list-posts
+            method: GET
+            url: https://jsonplaceholder.typicode.com/posts
+            expected_status: "200"
+            body: ""
+          - name: filter-comments
+            method: GET
+            url: https://jsonplaceholder.typicode.com/comments?postId=1
+            expected_status: "200"
+            body: ""
+          - name: create-post
+            method: POST
+            url: https://jsonplaceholder.typicode.com/posts
+            expected_status: "201"
+            body: '{"title":"load test","body":"created by k6","userId":1}'
+          - name: replace-post
+            method: PUT
+            url: https://jsonplaceholder.typicode.com/posts/1
+            expected_status: "200"
+            body: '{"id":1,"title":"replaced","body":"by k6","userId":1}'
+          - name: patch-post
+            method: PATCH
+            url: https://jsonplaceholder.typicode.com/posts/1
+            expected_status: "200"
+            body: '{"title":"patched"}'
+          - name: delete-post
+            method: DELETE
+            url: https://jsonplaceholder.typicode.com/posts/1
+            expected_status: "200"
+            body: ""
     env:
       # Inputs go through env vars, never straight into `run:` scripts,
       # so a crafted input can't inject shell commands.
-      TARGET_URL: ${{ inputs.target_url }}
-      METHOD: ${{ inputs.method }}
-      RATE: ${{ inputs.rate }}
-      DURATION: ${{ inputs.duration }}
-      BODY: ${{ inputs.body }}
-      HEADERS: ${{ inputs.headers }}
-      EXPECTED_STATUS: ${{ inputs.expected_status }}
-      P95_MS: ${{ inputs.p95_ms }}
-      MAX_ERROR_RATE: ${{ inputs.max_error_rate }}
+      TARGET_URL: ${{ matrix.url }}
+      METHOD: ${{ matrix.method }}
+      BODY: ${{ matrix.body }}
+      EXPECTED_STATUS: ${{ matrix.expected_status }}
+      RATE: ${{ inputs.rate || '40' }}
+      DURATION: ${{ inputs.duration || '15s' }}
+      P95_MS: ${{ inputs.p95_ms || '2000' }}
+      MAX_ERROR_RATE: ${{ inputs.max_error_rate || '0.01' }}
       AUTH_TOKEN: ${{ secrets.LOAD_TEST_AUTH_TOKEN }}
     steps:
       # ============= InvisiRisk Setup =============
@@ -86,11 +107,10 @@ jobs:
 
       - name: Validate inputs
         run: |
-          [[ "$TARGET_URL" =~ ^https?:// ]] || { echo "::error::target_url must start with http:// or https://"; exit 1; }
           [[ "$RATE" =~ ^[0-9]+$ ]] && (( RATE > 0 )) || { echo "::error::rate must be a positive integer"; exit 1; }
           [[ "$DURATION" =~ ^[0-9]+(ms|s|m|h)$ ]] || { echo "::error::duration must look like 10s, 2m"; exit 1; }
-          [[ "$EXPECTED_STATUS" =~ ^[1-5][0-9][0-9]$ ]] || { echo "::error::expected_status must be an HTTP status code"; exit 1; }
-          if [[ -n "$HEADERS" ]]; then echo "$HEADERS" | jq -e 'type == "object"' > /dev/null || { echo "::error::headers must be a JSON object"; exit 1; }; fi
+          [[ "$P95_MS" =~ ^[0-9]+$ ]] || { echo "::error::p95_ms must be a whole number"; exit 1; }
+          [[ "$MAX_ERROR_RATE" =~ ^(0(\.[0-9]+)?|1)$ ]] || { echo "::error::max_error_rate must be between 0 and 1"; exit 1; }
 
       - name: Install k6
         uses: grafana/setup-k6-action@v1
@@ -100,17 +120,23 @@ jobs:
           k6-version: "2.3.0"
 
       - name: Run load test
-        run: k6 run --summary-export=summary.json tests/load-test.js
+        # k6 honours HTTP_PROXY/HTTPS_PROXY set by the PSE action, so every
+        # request is sent through the InvisiRisk proxy.
+        run: |
+          echo "Proxy: ${HTTPS_PROXY:-none}"
+          k6 run --summary-export=summary.json tests/load-test.js
 
       - name: Write job summary
         if: always() && hashFiles('summary.json') != ''
+        env:
+          NAME: ${{ matrix.name }}
         run: |
-          jq -r --arg url "$TARGET_URL" --arg method "$METHOD" --arg rate "$RATE" --arg dur "$DURATION" '
+          jq -r --arg name "$NAME" --arg url "$TARGET_URL" --arg method "$METHOD" --arg rate "$RATE" --arg dur "$DURATION" '
             .metrics as $m
             | ($m.http_req_duration) as $d
             | def ms: . * 100 | round / 100 | tostring + " ms";
               def pct: . * 10000 | round / 100 | tostring + "%";
-            "## Load test: `\($method) \($url)`",
+            "## \($name): `\($method) \($url)`",
             "",
             "Target: **\($rate) req/s for \($dur)**",
             "",
@@ -119,7 +145,7 @@ jobs:
             "| Requests sent | \($m.http_reqs.count) |",
             "| Achieved rate | \($m.http_reqs.rate | round) req/s |",
             "| Failed requests | \($m.http_req_failed.value | pct) |",
-            "| Dropped iterations (runner could not keep up) | \($m.dropped_iterations.count // 0) |",
+            "| Dropped iterations (proxy or API could not keep up) | \($m.dropped_iterations.count // 0) |",
             "| Max VUs used | \($m.vus_max.max) |",
             "| Latency avg | \($d.avg | ms) |",
             "| Latency median | \($d.med | ms) |",
@@ -133,6 +159,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: k6-summary
+          name: k6-summary-${{ matrix.name }}
           path: summary.json
           if-no-files-found: ignore
