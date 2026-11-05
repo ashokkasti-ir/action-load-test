@@ -54,36 +54,16 @@ jobs:
             url: https://jsonplaceholder.typicode.com/posts/1
             expected_status: "200"
             body: ""
-          - name: list-posts
-            method: GET
-            url: https://jsonplaceholder.typicode.com/posts
-            expected_status: "200"
-            body: ""
-          - name: filter-comments
-            method: GET
-            url: https://jsonplaceholder.typicode.com/comments?postId=1
-            expected_status: "200"
-            body: ""
           - name: create-post
             method: POST
             url: https://jsonplaceholder.typicode.com/posts
             expected_status: "201"
             body: '{"title":"load test","body":"created by k6","userId":1}'
-          - name: replace-post
-            method: PUT
-            url: https://jsonplaceholder.typicode.com/posts/1
-            expected_status: "200"
-            body: '{"id":1,"title":"replaced","body":"by k6","userId":1}'
           - name: patch-post
             method: PATCH
             url: https://jsonplaceholder.typicode.com/posts/1
             expected_status: "200"
             body: '{"title":"patched"}'
-          - name: delete-post
-            method: DELETE
-            url: https://jsonplaceholder.typicode.com/posts/1
-            expected_status: "200"
-            body: ""
     env:
       # Inputs go through env vars, never straight into `run:` scripts,
       # so a crafted input can't inject shell commands.

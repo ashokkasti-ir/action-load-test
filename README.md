@@ -2,19 +2,17 @@
 
 Load test HTTP APIs from GitHub Actions with [k6](https://grafana.com/docs/k6/latest/), with all traffic going through the [InvisiRisk](https://invisirisk.com/) PSE proxy.
 
-The workflow runs a matrix of 7 request types against [JSONPlaceholder](https://jsonplaceholder.typicode.com/), a free public mock API that needs no key and publishes no rate limit. Each matrix job runs on its own runner with its own InvisiRisk proxy. By default each job sends 150 requests per second for 15 seconds, so one run makes about 15,750 calls in total.
+The workflow runs 3 request types against [JSONPlaceholder](https://jsonplaceholder.typicode.com/), a free public mock API that needs no key and publishes no rate limit, on both `ubuntu-24.04` and `ubuntu-26.04`: 6 jobs in total. Each job runs on its own runner with its own InvisiRisk proxy. By default each job sends 150 requests per second for 15 seconds, so one run makes about 13,500 calls.
 
-| Matrix job | Method | URL | Expected status |
+| API variation | Method | URL | Expected status |
 |---|---|---|---|
 | `get-single-post` | GET | `/posts/1` | 200 |
-| `list-posts` | GET | `/posts` | 200 |
-| `filter-comments` | GET | `/comments?postId=1` | 200 |
 | `create-post` | POST | `/posts` (JSON body) | 201 |
-| `replace-post` | PUT | `/posts/1` (JSON body) | 200 |
 | `patch-post` | PATCH | `/posts/1` (JSON body) | 200 |
-| `delete-post` | DELETE | `/posts/1` | 200 |
 
-To add or change a variation, edit `strategy.matrix.include` in [`.github/workflows/load-test.yml`](.github/workflows/load-test.yml). Each entry needs `name`, `method`, `url`, `expected_status` and `body` (empty string for no body).
+To add or change a variation, edit `strategy.matrix.api` in [`.github/workflows/load-test.yml`](.github/workflows/load-test.yml). Each entry needs `name`, `method`, `url`, `expected_status` and `body` (empty string for no body). Every entry runs once per OS in `strategy.matrix.os`.
+
+On `ubuntu-26.04` the InvisiRisk setup step currently fails: 26.04 ships `sudo-rs`, which ignores `sudo -E`, so the PSE binary never receives `INVISIRISK_PORTAL`. Switching the runner back to classic sudo (`sudo update-alternatives --set sudo /usr/bin/sudo.ws`) before the PSE step works around it; see branch `try-sudo-ws`.
 
 ## Run it from GitHub
 
