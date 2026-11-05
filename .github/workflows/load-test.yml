@@ -40,14 +40,15 @@ concurrency:
 
 jobs:
   load-test:
-    name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.api.name }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       # Let every variation finish so one slow endpoint doesn't hide the rest.
       fail-fast: false
       matrix:
-        include:
+        os: [ubuntu-24.04, ubuntu-26.04]
+        api:
           - name: get-single-post
             method: GET
             url: https://jsonplaceholder.typicode.com/posts/1
@@ -86,10 +87,10 @@ jobs:
     env:
       # Inputs go through env vars, never straight into `run:` scripts,
       # so a crafted input can't inject shell commands.
-      TARGET_URL: ${{ matrix.url }}
-      METHOD: ${{ matrix.method }}
-      BODY: ${{ matrix.body }}
-      EXPECTED_STATUS: ${{ matrix.expected_status }}
+      TARGET_URL: ${{ matrix.api.url }}
+      METHOD: ${{ matrix.api.method }}
+      BODY: ${{ matrix.api.body }}
+      EXPECTED_STATUS: ${{ matrix.api.expected_status }}
       RATE: ${{ inputs.rate || '150' }}
       DURATION: ${{ inputs.duration || '15s' }}
       P95_MS: ${{ inputs.p95_ms || '1000' }}
@@ -129,7 +130,7 @@ jobs:
       - name: Write job summary
         if: always() && hashFiles('summary.json') != ''
         env:
-          NAME: ${{ matrix.name }}
+          NAME: ${{ matrix.api.name }} (${{ matrix.os }})
         run: |
           jq -r --arg name "$NAME" --arg url "$TARGET_URL" --arg method "$METHOD" --arg rate "$RATE" --arg dur "$DURATION" '
             .metrics as $m
@@ -159,6 +160,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: k6-summary-${{ matrix.name }}
+          name: k6-summary-${{ matrix.api.name }}-${{ matrix.os }}
           path: summary.json
           if-no-files-found: ignore
