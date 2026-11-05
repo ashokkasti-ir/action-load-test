@@ -11,10 +11,9 @@ import { check } from 'k6';
 const env = (name, fallback) =>
   __ENV[name] !== undefined && __ENV[name] !== '' ? __ENV[name] : fallback;
 
-const TARGET_URL = env('TARGET_URL');
-if (!TARGET_URL) {
-  throw new Error('TARGET_URL is required, e.g. TARGET_URL=https://api.example.com/health');
-}
+// Default: JSONPlaceholder, a free public mock API with no API key and no
+// published rate limit. Override with your own API via TARGET_URL.
+const TARGET_URL = env('TARGET_URL', 'https://jsonplaceholder.typicode.com/posts/1');
 
 const METHOD = env('METHOD', 'GET').toUpperCase();
 const BODY = env('BODY', null);

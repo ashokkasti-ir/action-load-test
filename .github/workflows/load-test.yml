@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: "Full URL to hit, e.g. https://api.example.com/v1/health"
+        description: "Full URL to hit. Default is JSONPlaceholder, a free public mock API (use .../posts with POST, expected 201)"
         required: true
+        default: "https://jsonplaceholder.typicode.com/posts/1"
         type: string
       method:
         description: "HTTP method"
