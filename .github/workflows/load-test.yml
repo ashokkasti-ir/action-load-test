@@ -11,7 +11,7 @@ on:
       rate:
         description: "Requests per second, per matrix job"
         required: true
-        default: "40"
+        default: "150"
         type: string
       duration:
         description: "How long each job sustains that rate (k6 format: 10s, 1m)"
@@ -21,7 +21,7 @@ on:
       p95_ms:
         description: "Fail a job if its p95 latency exceeds this many ms"
         required: true
-        default: "2000"
+        default: "1000"
         type: string
       max_error_rate:
         description: "Fail a job if its error rate exceeds this fraction (0.01 = 1%)"
@@ -90,9 +90,9 @@ jobs:
       METHOD: ${{ matrix.method }}
       BODY: ${{ matrix.body }}
       EXPECTED_STATUS: ${{ matrix.expected_status }}
-      RATE: ${{ inputs.rate || '40' }}
+      RATE: ${{ inputs.rate || '150' }}
       DURATION: ${{ inputs.duration || '15s' }}
-      P95_MS: ${{ inputs.p95_ms || '2000' }}
+      P95_MS: ${{ inputs.p95_ms || '1000' }}
       MAX_ERROR_RATE: ${{ inputs.max_error_rate || '0.01' }}
       AUTH_TOKEN: ${{ secrets.LOAD_TEST_AUTH_TOKEN }}
     steps:
