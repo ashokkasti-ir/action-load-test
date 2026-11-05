@@ -49,6 +49,8 @@ on:
         type: string
 
 permissions:
+  checks: write
+  actions: read
   contents: read
 
 concurrency:
@@ -73,6 +75,13 @@ jobs:
       MAX_ERROR_RATE: ${{ inputs.max_error_rate }}
       AUTH_TOKEN: ${{ secrets.LOAD_TEST_AUTH_TOKEN }}
     steps:
+      # ============= InvisiRisk Setup =============
+      - name: Setup PSE
+        uses: invisirisk/pse-action@latest
+        with:
+          app_token: ${{secrets.IR_TOKEN}}
+          api_url: https://app.stage.invisirisk.com
+      # ============= InvisiRisk Setup End =============
       - uses: actions/checkout@v7
 
       - name: Validate inputs
