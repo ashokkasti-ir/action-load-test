@@ -97,6 +97,13 @@ jobs:
       MAX_ERROR_RATE: ${{ inputs.max_error_rate || '0.01' }}
       AUTH_TOKEN: ${{ secrets.LOAD_TEST_AUTH_TOKEN }}
     steps:
+      - name: Use classic sudo (26.04 ships sudo-rs, which ignores sudo -E)
+        if: matrix.os == 'ubuntu-26.04'
+        run: |
+          sudo --version | head -1
+          ls -l /usr/bin/sudo* /etc/alternatives/sudo 2>/dev/null || true
+          sudo update-alternatives --set sudo /usr/bin/sudo.ws
+          sudo --version | head -1
       # ============= InvisiRisk Setup =============
       - name: Setup PSE
         uses: invisirisk/pse-action@latest
